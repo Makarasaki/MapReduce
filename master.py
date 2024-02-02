@@ -2,9 +2,11 @@ import requests
 import csv
 from itertools import islice
 import requests
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, make_response
 import threading
 import sys
+import time
+from collections import Counter
 
 def split_data(data, no_chunks = 4):
     size = len(data)
@@ -59,48 +61,71 @@ def split_dict_into_parts(data):
     parts = [data[i * part_size:(i + 1) * part_size] for i in range(no_workers)]
     return parts
 
+def final_results(data):
+    counts = {}
+    for item in data:
+        for key, value in item.items():
+            counts.setdefault(key, Counter()).update([value])
+
+    # Find the most common hashed username for each key
+    results = {}
+    for key, counter in counts.items():
+        results[key] = counter.most_common(1)[0][0]
+    for user1, user2 in results.items():
+        print(f"User '{user1}' should follow '{user2}'")
+
 app = Flask(__name__)
 
 @app.route('/aggregate', methods = ['POST'])
 def aggregate_data():
+    global ag_counter
     data = request.get_json()
     print("received data from worker")
     aggregated_data.extend(data)
     print(len(aggregated_data))
+    ag_counter += 1
+    if ag_counter == 4:
+        final_results(aggregated_data)
+    return make_response('', 200)
 
 def run_flask_app(port):
-    app.run(debug=True, port=port)
+    app.run(debug=False, port=port)
+
+def send_data():
+    for index, worker_url in enumerate(workers_map_urls):
+        print(f"Sending raw data to {worker_url}")
+        response = requests.post(worker_url, json=chunks[index])
+
+def send_comand(comand, urls):
+    for index, worker_url in enumerate(urls):
+        print(f"Sending {comand} comand to {worker_url}")
+        response = requests.post(worker_url, json=comand)
+
+def main():
+    send_data()
+    send_comand("shuffle", workers_shuffle_urls)
+    send_comand("reduce", workers_reduce_urls)
+    time.sleep(10)
+    send_comand("aggregate", workers_aggregate_urls)
 
 if __name__ == '__main__':
     starting_port = 5000
     no_workers = 4
     workers_map_urls = [f'http://localhost:{port}/map' for port in range(starting_port, starting_port + no_workers)]
     workers_shuffle_urls = [f'http://localhost:{port}/shuffle' for port in range(starting_port, starting_port + no_workers)]
+    workers_reduce_urls = [f'http://localhost:{port}/reduce' for port in range(starting_port, starting_port + no_workers)]
     workers_aggregate_urls = [f'http://localhost:{port}/aggregate' for port in range(starting_port, starting_port + no_workers)]
     master_port = starting_port + no_workers + 1
     aggregated_data = []
-    # Create and start the Flask app thread
-    flask_thread = threading.Thread(target=run_flask_app, args=(master_port,))
-    flask_thread.start()
-
-    data = {'message': 'hi'}
-    csv_filename = 'data/spotify_dataset.csv'
+    ag_counter = 0
+    # csv_filename = 'data/spotify_dataset.csv'
     csv_filename = 'data/test.csv' 
     csv_data = csv_to_list(csv_filename)
-    # print(csv_data)
     chunks = split_data(csv_data, no_workers)
-    # print(chunks)
-    # for i in chunks:
-    #     print((len(i)))
 
-    for index, worker_url in enumerate(workers_map_urls):
-        print(f"Sending raw data to {worker_url}")
-        response = requests.post(worker_url, json=chunks[index])
-    for index, worker_url in enumerate(workers_shuffle_urls):
-        print(f"Sending shuffling comand to {worker_url}")
-        response = requests.post(worker_url, json="shuffle")
-    for index, worker_url in enumerate(workers_aggregate_urls):
-        print(f"Sending shuffling comand to {worker_url}")
-        response = requests.post(worker_url, json="aggregate")
-    # print(response)
+    main_thread = threading.Thread(target=main)
+    main_thread.start()
+
+    run_flask_app(master_port)
+
     print("gotowe")
