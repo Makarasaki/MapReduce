@@ -61,18 +61,19 @@ def split_dict_into_parts(data):
     parts = [data[i * part_size:(i + 1) * part_size] for i in range(no_workers)]
     return parts
 
-def final_results(data):
-    counts = {}
-    for item in data:
-        for key, value in item.items():
-            counts.setdefault(key, Counter()).update([value])
+def final_results(results):
+    # counts = {}
+    # for item in data:
+    #     for key, value in item.items():
+    #         counts.setdefault(key, Counter()).update([value])
 
-    # Find the most common hashed username for each key
-    results = {}
-    for key, counter in counts.items():
-        results[key] = counter.most_common(1)[0][0]
-    for user1, user2 in results.items():
-        print(f"User '{user1}' should follow '{user2}'")
+    # # Find the most common hashed username for each key
+    # results = {}
+    # for key, counter in counts.items():
+    #     results[key] = counter.most_common(1)[0][0]
+    for result in results:
+        for user1, user2 in result.items():
+            print(f"User '{user1}' should follow user '{user2}'")
 
 app = Flask(__name__)
 
@@ -81,11 +82,29 @@ def aggregate_data():
     global ag_counter
     data = request.get_json()
     print("received data from worker")
-    aggregated_data.extend(data)
+    aggregated_data.append(data)
     print(len(aggregated_data))
     ag_counter += 1
-    if ag_counter == 4:
+    if ag_counter == no_workers:
         final_results(aggregated_data)
+    return make_response('', 200)
+
+@app.route('/controller', methods = ['POST'])
+def workflow_control():
+    data = request.get_json()
+    print(data)
+    ready_counter[data] += 1
+    if ready_counter['ready for shuffling'] == no_workers:
+        ready_counter['ready for shuffling'] = 0
+        send_comand("shuffle", workers_shuffle_urls)
+    elif ready_counter['ready for reducing'] == no_workers:
+        ready_counter['ready for reducing'] = 0
+        send_comand("reduce", workers_reduce_urls)
+    elif ready_counter['ready for shuffling 2'] == no_workers:
+        ready_counter['ready for shuffling 2'] = 0
+        send_comand("shuffle 2", workers_shuffle_urls)
+    elif ready_counter['ready for reducing 2'] == no_workers:
+        ready_counter['ready for reducing 2'] = 0
     return make_response('', 200)
 
 def run_flask_app(port):
@@ -101,12 +120,12 @@ def send_comand(comand, urls):
         print(f"Sending {comand} comand to {worker_url}")
         response = requests.post(worker_url, json=comand)
 
-def main():
+def start():
     send_data()
-    send_comand("shuffle", workers_shuffle_urls)
-    send_comand("reduce", workers_reduce_urls)
-    time.sleep(10)
-    send_comand("aggregate", workers_aggregate_urls)
+    # send_comand("shuffle", workers_shuffle_urls)
+    # send_comand("reduce", workers_reduce_urls)
+    # time.sleep(10)
+    # send_comand("aggregate", workers_aggregate_urls)
 
 if __name__ == '__main__':
     starting_port = 5000
@@ -118,14 +137,13 @@ if __name__ == '__main__':
     master_port = starting_port + no_workers + 1
     aggregated_data = []
     ag_counter = 0
+    ready_counter = {'ready for shuffling': 0, 'ready for reducing': 0, 'ready for shuffling 2': 0, 'ready for reducing 2': 0}
     # csv_filename = 'data/spotify_dataset.csv'
     csv_filename = 'data/test.csv' 
     csv_data = csv_to_list(csv_filename)
     chunks = split_data(csv_data, no_workers)
 
-    main_thread = threading.Thread(target=main)
+    main_thread = threading.Thread(target=start)
     main_thread.start()
 
     run_flask_app(master_port)
-
-    print("gotowe")
