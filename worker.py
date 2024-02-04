@@ -1,19 +1,15 @@
-import sys
-from flask import Flask, jsonify, request, make_response
-import requests
-import time
-from functools import reduce
-from itertools import combinations
-import threading
-from collections import Counter
 import os
-# os.environ['PYTHONHASHSEED'] = '123'
+import sys
+import time
+import requests
+import threading
+from functools import reduce
+from collections import Counter
+from itertools import combinations
+from flask import Flask, jsonify, request, make_response
 
 def create_pairs(data):
-    # Initialize an empty list to store the pairs
     pairs_list = []
-    # print(data)
-    # Iterate over the dictionary
     for key, values in data.items():
         # Generate all possible pairs of values for the current key
         pairs = list(combinations(values, 2))
@@ -25,7 +21,6 @@ def create_pairs(data):
 
 def map_data(data):
     filtered_data = filter(lambda x: len(x.split(';')) >= 3, data)
-
     # Applying lambda to convert each filtered element to a dictionary
     mapped = list(map(lambda x: {x.split(';')[2]: x.split(';')[0]}, filtered_data))
     for record in mapped:
@@ -37,8 +32,6 @@ def prepare_data_for_shuffle2():
     for record in final_pairs:
         shuffle_list_2[hash(str(record.keys()))%no_workers].append(record)
     final_reduce.append(shuffle_list_2[int(PORT) - starting_port])
-    # print(shuffle_list_2)
-    # time.sleep(30)
     response = requests.post(master_ready_url, json='ready for shuffling 2')
 
 def reduce_data():
@@ -53,14 +46,13 @@ def reduce_data():
     print(f"Reducing finished, {len(final_pairs)} pairs created")
 
 def reduce_data_2(data):
-    # print(data)
     data = reduce(lambda x, y: x + y, data)
     counts = {}
     for item in data:
         for key, value in item.items():
             counts.setdefault(key, Counter()).update([value])
 
-    # Find the most common hashed username for each key
+    # Find the most common username for each user
     results = {}
     for key, counter in counts.items():
         results[key] = counter.most_common(1)[0][0]
@@ -72,7 +64,6 @@ app = Flask(__name__)
 def get_data():
     data = request.get_json()
     print("received data from master")
-    # Filter out records with insufficient elements
     map_data(data)
     return make_response('', 200)
 
@@ -80,7 +71,6 @@ def get_data():
 def get_shuffle_comand():
     data = request.get_json()
     if data == 'shuffle':
-        # time.sleep(10)
         for index, worker_url in enumerate(workers_reduce_urls):
             if worker_url != f"http://localhost:{PORT}/reduce":
                 print(f"sending to: {worker_url}")
@@ -97,9 +87,6 @@ def get_shuffled():
     data = request.get_json()
     if data == "reduce":
         pass
-        # reduce_thread = threading.Thread(target=reduce_data)
-    
-        # reduce_thread.start()
     else:
         print("Received data from another worker")
         mapped_data.append(data)

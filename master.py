@@ -1,12 +1,8 @@
-import requests
 import csv
-from itertools import islice
 import requests
-from flask import Flask, jsonify, request, make_response
+import requests
 import threading
-import sys
-import time
-from collections import Counter
+from flask import Flask, jsonify, request, make_response
 
 def split_data(data, no_chunks = 4):
     size = len(data)
@@ -24,30 +20,6 @@ def split_data(data, no_chunks = 4):
         lower_bound = upper_bound
     return chunks
 
-def read_csv_to_list_of_dicts(filename):
-    data_list = []
-    with open(filename, mode='r', newline='', encoding='utf-8') as file:
-        reader = csv.reader(file, delimiter=';')
-        next(reader)  # Skip the header row
-        for row in reader:
-            print(row)
-            user_id, artistname, trackname, playlistname = row
-            data_list.append({
-                'user_id': user_id,
-                'artistname': artistname,
-                'trackname': trackname,
-                'playlistname': playlistname
-            })
-    return data_list
-
-def csv_to_dict(csv_file):
-    data = []
-    with open(csv_file, 'r') as csvfile:
-        csvreader = csv.DictReader(csvfile, delimiter = ',', quitechar = '"')
-        for row in csvreader:
-            data.append(row)
-    return data
-
 def csv_to_list(filename):
     with open(filename, 'r') as file:
         data = []
@@ -55,22 +27,7 @@ def csv_to_list(filename):
             data.append(line.strip('"\n'))
         return data
 
-def split_dict_into_parts(data):
-    n = len(data)
-    part_size = n // no_workers
-    parts = [data[i * part_size:(i + 1) * part_size] for i in range(no_workers)]
-    return parts
-
 def final_results(results):
-    # counts = {}
-    # for item in data:
-    #     for key, value in item.items():
-    #         counts.setdefault(key, Counter()).update([value])
-
-    # # Find the most common hashed username for each key
-    # results = {}
-    # for key, counter in counts.items():
-    #     results[key] = counter.most_common(1)[0][0]
     for result in results:
         for user1, user2 in result.items():
             print(f"User '{user1}' should follow user '{user2}'")
@@ -120,13 +77,6 @@ def send_comand(comand, urls):
         print(f"Sending {comand} comand to {worker_url}")
         response = requests.post(worker_url, json=comand)
 
-def start():
-    send_data()
-    # send_comand("shuffle", workers_shuffle_urls)
-    # send_comand("reduce", workers_reduce_urls)
-    # time.sleep(10)
-    # send_comand("aggregate", workers_aggregate_urls)
-
 if __name__ == '__main__':
     starting_port = 5000
     no_workers = 4
@@ -143,7 +93,7 @@ if __name__ == '__main__':
     csv_data = csv_to_list(csv_filename)
     chunks = split_data(csv_data, no_workers)
 
-    main_thread = threading.Thread(target=start)
+    main_thread = threading.Thread(target=send_data)
     main_thread.start()
 
     run_flask_app(master_port)
