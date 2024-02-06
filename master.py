@@ -78,8 +78,8 @@ if __name__ == '__main__':
     master_port = starting_port + no_workers + 1
     aggregated_data = []
     ready_counter = {'ready for shuffling': 0, 'ready for shuffling 2': 0}
-    # csv_filename = 'data/spotify_dataset.csv'
-    csv_filename = 'data/test.csv' 
+    csv_filename = 'data/spotify_dataset.csv'
+    csv_filename = 'data/test2.csv' 
     csv_data = csv_to_list(csv_filename)
     chunks = split_data(csv_data, no_workers)
 
