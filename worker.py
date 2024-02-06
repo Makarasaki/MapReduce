@@ -1,6 +1,5 @@
 import os
 import sys
-import time
 import requests
 import threading
 from functools import reduce
@@ -42,8 +41,8 @@ def reduce_data():
     song_users = reduce(lambda acc, d: {**acc, **{k: acc.get(k, []) + [v] for k, v in d.items()}}, flattened_list, {})
     songs_users_no_duplicates = {song: list(set(users)) for song, users in song_users.items()}
     final_pairs.extend(create_pairs(songs_users_no_duplicates))
-    prepare_data_for_shuffle2()
     print(f"Reducing finished, {len(final_pairs)} pairs created")
+    prepare_data_for_shuffle2()
 
 def reduce_data_2(data):
     data = reduce(lambda x, y: x + y, data)
@@ -64,18 +63,20 @@ app = Flask(__name__)
 def get_data():
     data = request.get_json()
     print("received data from master")
-    map_data(data)
+    # map_data(data)
+    map_thread = threading.Thread(target=map_data, args=(data,))
+    map_thread.start()
     return make_response('', 200)
 
 @app.route('/shuffle', methods = ['POST'])
 def get_shuffle_comand():
-    data = request.get_json()
-    if data == 'shuffle':
+    command = request.get_json()
+    if command == 'shuffle':
         for index, worker_url in enumerate(workers_reduce_urls):
             if worker_url != f"http://localhost:{PORT}/reduce":
                 print(f"sending to: {worker_url}")
                 response = requests.post(worker_url, json=shuffle_list[index])
-    elif data == 'shuffle 2':
+    elif command == 'shuffle 2':
         for index, worker_url in enumerate(workers_reduce2_urls):
             if worker_url != f"http://localhost:{PORT}/reduce2":
                 print(f"sending to: {worker_url}")
@@ -94,8 +95,6 @@ def get_shuffled():
             print("Starting second reducing")
             reduce_thread = threading.Thread(target=reduce_data)
             reduce_thread.start()
-            # print("sending 'ready for reducing'")
-            # response = requests.post(master_ready_url, json='ready for reducing')
     return make_response('', 200)
 
 @app.route('/reduce2', methods = ['POST'])
@@ -107,15 +106,6 @@ def get_shuffled2():
         reduce_thread = threading.Thread(target=reduce_data_2, args=(final_reduce,))
         reduce_thread.start()
     return make_response('', 200)
-
-@app.route('/aggregate', methods = ['POST'])
-def get_aggregate_comand():
-    data = request.get_json()
-    if data == 'aggregate':
-        print(f"Sending {len(final_pairs)} pairs to master")
-        response = requests.post(master_url, json=final_pairs)
-    return make_response('', 200)
-
 
 if __name__ == '__main__':
     print('start')

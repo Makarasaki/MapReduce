@@ -36,32 +36,23 @@ app = Flask(__name__)
 
 @app.route('/aggregate', methods = ['POST'])
 def aggregate_data():
-    global ag_counter
     data = request.get_json()
-    print("received data from worker")
+    print(f"Received data from worker, size: {len(data)}")
     aggregated_data.append(data)
-    print(len(aggregated_data))
-    ag_counter += 1
-    if ag_counter == no_workers:
+    if len(aggregated_data) == no_workers:
         final_results(aggregated_data)
     return make_response('', 200)
 
 @app.route('/controller', methods = ['POST'])
 def workflow_control():
     data = request.get_json()
-    print(data)
     ready_counter[data] += 1
     if ready_counter['ready for shuffling'] == no_workers:
         ready_counter['ready for shuffling'] = 0
         send_comand("shuffle", workers_shuffle_urls)
-    elif ready_counter['ready for reducing'] == no_workers:
-        ready_counter['ready for reducing'] = 0
-        send_comand("reduce", workers_reduce_urls)
     elif ready_counter['ready for shuffling 2'] == no_workers:
         ready_counter['ready for shuffling 2'] = 0
         send_comand("shuffle 2", workers_shuffle_urls)
-    elif ready_counter['ready for reducing 2'] == no_workers:
-        ready_counter['ready for reducing 2'] = 0
     return make_response('', 200)
 
 def run_flask_app(port):
@@ -86,8 +77,7 @@ if __name__ == '__main__':
     workers_aggregate_urls = [f'http://localhost:{port}/aggregate' for port in range(starting_port, starting_port + no_workers)]
     master_port = starting_port + no_workers + 1
     aggregated_data = []
-    ag_counter = 0
-    ready_counter = {'ready for shuffling': 0, 'ready for reducing': 0, 'ready for shuffling 2': 0, 'ready for reducing 2': 0}
+    ready_counter = {'ready for shuffling': 0, 'ready for shuffling 2': 0}
     # csv_filename = 'data/spotify_dataset.csv'
     csv_filename = 'data/test.csv' 
     csv_data = csv_to_list(csv_filename)
